@@ -31,7 +31,7 @@
 ### Windows
 
 ```bat
-git clone https://github.com/your-username/PortableAI-Creator.git
+git clone https://github.com/ESlavin1808/PortableAI-Creator.git
 cd PortableAI-Creator
 start.bat
 ```
@@ -41,7 +41,7 @@ start.bat
 ### Linux / macOS
 
 ```bash
-git clone https://github.com/your-username/PortableAI-Creator.git
+git clone https://github.com/ESlavin1808/PortableAI-Creator.git
 cd PortableAI-Creator
 chmod +x install.sh start.sh
 ./install.sh
