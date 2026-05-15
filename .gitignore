@@ -1,0 +1,46 @@
+# Виртуальное окружение
+venv/
+.venv/
+env/
+
+# Python кэш
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Папки сборки (могут весить десятки ГБ)
+output/
+temp/
+logs/
+
+# Архивы сборок
+*.zip
+*.tar.gz
+
+# Конфиг с личными путями (каждый настраивает под себя)
+config.json
+
+# Кэш тестов
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Временные файлы
+*.tmp
+*.bak
+
+# Сборка (PyInstaller и т.п.)
+dist/
+build/

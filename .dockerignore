@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+output/
+data/
+.pytest_cache/
+*.zip
+*.tar.gz
+*.egg-info
+*.log

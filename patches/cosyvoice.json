@@ -1,0 +1,11 @@
+{
+  "repo_name": "CosyVoice",
+  "description": "CosyVoice TTS — голосовой синтез от Alibaba",
+  "force_packages": ["setuptools<69.0.0", "wheel"],
+  "replace_packages": {
+    "openai-whisper": "openai-whisper>=2024.9.0"
+  },
+  "env_vars": {
+    "HF_HOME": "./models"
+  }
+}

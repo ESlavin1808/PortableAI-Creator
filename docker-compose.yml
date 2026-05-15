@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  portableai:
+    build: .
+    container_name: portableai-creator
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./output:/app/output
+      - ./patches:/app/patches
+      - ./data:/app/data
+    environment:
+      - FLASK_ENV=production
+      - ALLOWED_HOSTS=127.0.0.1,localhost,0.0.0.0
+      - GUNICORN_TIMEOUT=900
+    restart: unless-stopped

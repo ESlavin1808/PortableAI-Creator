@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>📦 PortableAI Creator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="app-wrap">
+    <div class="topbar">
+        <h1>📦 Portable<span>AI Creator</span></h1>
+        <div class="top-actions">
+            <a href="/settings" class="btn btn-secondary btn-sm">⚙️ Настройки</a>
+        </div>
+    </div>
+    <div class="content">
+
+    <!-- ── Вкладки ── -->
+    <div class="nav-tabs" style="display:flex;gap:8px;margin-bottom:20px">
+        <button class="btn btn-primary" onclick="showTab('build', this)">🛠️ Сборка</button>
+        <button class="btn btn-secondary" onclick="showTab('dashboard', this)">📂 Мои приложения</button>
+        <button class="btn btn-secondary" onclick="showTab('diagnostics', this)">🛡️ Диагностика</button>
+    </div>
+
+    <!-- ── Таб 1: Сборка ── -->
+    <div id="tab-build">
+        <div class="build-box">
+            <h2>🛠️ Сборка нового приложения</h2>
+            <div class="url-input-row">
+                <input type="text" id="repoUrl" placeholder="https://github.com/user/repo.git"
+                       value="{{ result_html if result_html else '' }}">
+                <button class="btn btn-primary" onclick="startBuild()">▶ Собрать</button>
+            </div>
+            <small style="color:#64748b">Git-URL или полный путь к локальной папке</small>
+        </div>
+
+        <div id="loading" class="hidden">
+            <div class="progress-bar"></div>
+            <p id="statusText" style="text-align:center;color:#64748b">Анализирую репозиторий...</p>
+        </div>
+
+        {% if result_html %}
+        <div class="card">
+            <h2>🔍 Результат анализа</h2>
+            <div>{{ result_html|safe }}</div>
+            <button class="btn btn-success" onclick="confirmBuild()" style="margin-top:16px">🚀 Начать сборку</button>
+        </div>
+        {% endif %}
+
+        <div id="buildLog" class="log-area" style="display:none"></div>
+
+        <div id="analyzeForm" style="display:none">
+            <form action="/analyze" method="GET">
+                <input type="hidden" name="repo" id="analyzeRepo">
+            </form>
+        </div>
+    </div>
+
+    <!-- ── Таб 2: Дашборд ── -->
+    <div id="tab-dashboard" class="hidden">
+        <div class="dashboard">
+            <div class="stat-card">
+                <div class="stat-val" id="appCount">0</div>
+                <div class="stat-label">Приложений собрано</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" id="appSize">0</div>
+                <div class="stat-label">Общий размер, МБ</div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>📂 Мои приложения</h2>
+            <div id="appListContainer">
+                <p style="text-align:center;padding:20px;color:#64748b">Загрузка...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Таб 3: Диагностика ── -->
+    <div id="tab-diagnostics" class="hidden">
+        <div class="card">
+            <h2>🛡️ Pre-flight проверки</h2>
+            <div style="margin-bottom:16px">
+                <button class="btn btn-primary btn-sm" onclick="runPreflight()">🔍 Запустить проверку</button>
+                <button class="btn btn-secondary btn-sm" onclick="runSanity()">🧪 Sanity Check</button>
+            </div>
+            <div id="preflightResult" class="log-area"><span style="color:#64748b">Нажмите «Запустить проверку»</span></div>
+        </div>
+    </div>
+
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

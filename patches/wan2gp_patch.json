@@ -1,0 +1,21 @@
+{
+  "description": "Wan2GP — видеогенерация на базе WAN",
+  "force_packages": [
+    "torch>=2.3.0",
+    "torchvision",
+    "torchaudio"
+  ],
+  "extra_index_urls": [
+    "https://download.pytorch.org/whl/cu128"
+  ],
+  "skip_packages": [
+    "triton",
+    "flash-attn",
+    "deepspeed"
+  ],
+  "env_vars": {
+    "PYTORCH_CUDA_ALLOC_CONF": "garbage_collection_threshold:0.6,max_split_size_mb:128",
+    "GRADIO_SERVER_PORT": "7860"
+  },
+  "notes": "setup.py в этом проекте — собственный CLI, не pip-пакет. Устанавливать через pip install . нельзя."
+}

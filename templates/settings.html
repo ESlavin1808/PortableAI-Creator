@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>⚙️ Настройки — PortableAI Creator</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="app-wrap">
+  <div class="topbar">
+    <h1>⚙️ <span>Настройки</span></h1>
+    <div class="top-actions">
+      <a href="/" class="btn btn-secondary btn-sm">← На главную</a>
+    </div>
+  </div>
+  <div class="content">
+
+{% if path_errors %}
+<div style="background:#450a0a;border:1px solid #ef4444;border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;color:#fca5a5">
+  ⚠️ Проблемы с папками:
+  <ul style="margin:6px 0 0;padding-left:18px">
+    {% for e in path_errors %}<li>{{ e }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<form id="settingsForm">
+
+  <!-- ── 1. ПУТИ ── -->
+  <div class="card">
+    <div class="section-title">📂 Пути</div>
+    <div class="path-row">
+      <div class="fg">
+        <label>Папка вывода</label>
+        <input type="text" name="output_dir" value="{{ s.output_dir }}">
+        <small>Куда кладутся готовые сборки</small>
+      </div>
+      <div class="fg">
+        <label>Временная папка</label>
+        <input type="text" name="temp_dir" value="{{ s.temp_dir }}">
+        <small>Python-кэш, pip-кэш</small>
+      </div>
+      <div class="fg">
+        <label>Папка кэша</label>
+        <input type="text" name="cache_dir" value="{{ s.cache_dir }}">
+        <small>Скачанные архивы Python</small>
+      </div>
+      <div class="fg">
+        <label>Папка логов</label>
+        <input type="text" name="logs_dir" value="{{ s.logs_dir }}">
+        <small>Файлы *.log</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 2. СБОРКА ── -->
+  <div class="card">
+    <div class="section-title">🐍 Python и сборка</div>
+    <div class="row">
+      <div class="fg">
+        <label>Версия Python по умолчанию</label>
+        <select name="python_version">
+          <option value="3.10" {% if s.python_version == "3.10" %}selected{% endif %}>3.10.x</option>
+          <option value="3.11" {% if s.python_version == "3.11" %}selected{% endif %}>3.11.x (рекомендуется)</option>
+          <option value="3.12" {% if s.python_version == "3.12" %}selected{% endif %}>3.12.x</option>
+          <option value="3.13" {% if s.python_version == "3.13" %}selected{% endif %}>3.13.x (экспериментально)</option>
+        </select>
+        <small>Можно переопределить в pyproject.toml</small>
+      </div>
+      <div class="fg">
+        <label>Тайм-аут установки пакета, сек</label>
+        <input type="number" name="install_timeout" value="{{ s.install_timeout }}" min="60" step="60">
+        <small>Для torch/tensorflow ставьте ≥ 900</small>
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="toggle-row">
+        <input type="checkbox" name="create_launcher" id="cb_launcher" {% if s.create_launcher %}checked{% endif %}>
+        <label for="cb_launcher">Создавать .bat / .sh ярлыки запуска</label>
+      </div>
+      <div class="toggle-row">
+        <input type="checkbox" name="enable_ai_optimization" id="cb_aiopt" {% if s.enable_ai_optimization %}checked{% endif %}>
+        <label for="cb_aiopt">AI-оптимизация размера</label>
+        <small>(удаляет тесты, __pycache__, .c-файлы)</small>
+      </div>
+      <div class="toggle-row">
+        <input type="checkbox" name="strip_debug_symbols" id="cb_strip" {% if s.strip_debug_symbols %}checked{% endif %}>
+        <label for="cb_strip">Убирать отладочные символы из .exe/.dll</label>
+      </div>
+      <div class="toggle-row">
+        <input type="checkbox" name="run_sanity_check" id="cb_sanity" {% if s.run_sanity_check %}checked{% endif %}>
+        <label for="cb_sanity">Sanity check после сборки <span class="badge-new">NEW</span></label>
+        <small>(тест import torch, gradio, CUDA и т.д.)</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 3. АРХИВАЦИЯ ── -->
+  <div class="card">
+    <div class="section-title">🗜️ Архивация</div>
+    <div class="toggle-row" style="margin-bottom:12px">
+      <input type="checkbox" name="enable_compression" id="cb_zip" {% if s.enable_compression %}checked{% endif %}>
+      <label for="cb_zip">Упаковывать результат в ZIP</label>
+    </div>
+    <div class="fg" style="max-width:300px">
+      <label>Уровень сжатия (1 — быстро, 9 — максимум)</label>
+      <input type="number" name="compression_level" value="{{ s.compression_level }}" min="1" max="9" step="1">
+      <small>6 — оптимальный баланс скорости и размера</small>
+    </div>
+  </div>
+
+  <!-- ── 4. GIT / СЕТЬ ── -->
+  <div class="card">
+    <div class="section-title">🌐 Git и сеть</div>
+    <div class="row">
+      <div class="fg">
+        <label>Ветка по умолчанию</label>
+        <input type="text" name="git_default_branch" value="{{ s.git_default_branch }}">
+      </div>
+      <div class="fg">
+        <label>Тайм-аут Git clone, сек</label>
+        <input type="number" name="git_timeout_seconds" value="{{ s.git_timeout_seconds }}" min="30">
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <div class="toggle-row">
+        <input type="checkbox" name="git_shallow_clone" id="cb_shallow" {% if s.git_shallow_clone %}checked{% endif %}>
+        <label for="cb_shallow">Shallow clone (depth=1, быстрее)</label>
+        <small>— отключите только если нужна полная история</small>
+      </div>
+      <div class="toggle-row">
+        <input type="checkbox" name="verify_ssl" id="cb_ssl" {% if s.verify_ssl %}checked{% endif %}>
+        <label for="cb_ssl">Проверять SSL-сертификаты</label>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <div class="toggle-row" style="margin-bottom:10px">
+        <input type="checkbox" name="use_proxy" id="cb_proxy" {% if s.use_proxy %}checked{% endif %}
+               onchange="document.getElementById('proxy_fields').style.display=this.checked?'grid':'none'">
+        <label for="cb_proxy">Использовать прокси</label>
+      </div>
+      <div id="proxy_fields" class="row" style="display:{% if s.use_proxy %}grid{% else %}none{% endif %}">
+        <div class="fg">
+          <label>HTTP прокси</label>
+          <input type="text" name="proxy_http" value="{{ s.proxy_http }}" placeholder="http://host:port">
+        </div>
+        <div class="fg">
+          <label>HTTPS прокси</label>
+          <input type="text" name="proxy_https" value="{{ s.proxy_https }}" placeholder="http://host:port">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 5. ЛОГИРОВАНИЕ ── -->
+  <div class="card">
+    <div class="section-title">📋 Логирование</div>
+    <div class="row">
+      <div class="fg">
+        <label>Уровень логов</label>
+        <select name="log_level">
+          {% for lvl in ["DEBUG","INFO","WARNING","ERROR"] %}
+          <option value="{{ lvl }}" {% if s.log_level == lvl %}selected{% endif %}>{{ lvl }}</option>
+          {% endfor %}
+        </select>
+        <small>DEBUG — максимум деталей, INFO — норма</small>
+      </div>
+      <div class="fg">
+        <label>Максимальный размер лог-файла, МБ</label>
+        <input type="number" name="log_max_size_mb" value="{{ s.log_max_size_mb }}" min="1" max="500">
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <div class="toggle-row">
+        <input type="checkbox" name="log_to_file" id="cb_logfile" {% if s.log_to_file %}checked{% endif %}>
+        <label for="cb_logfile">Писать логи в файл (logs/)</label>
+      </div>
+      <div class="toggle-row">
+        <input type="checkbox" name="enable_telemetry" id="cb_telem" {% if s.enable_telemetry %}checked{% endif %}>
+        <label for="cb_telem">Анонимная телеметрия (статистика сборок)</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 6. AI-ОПТИМИЗАЦИЯ ── -->
+  <div class="card">
+    <div class="section-title">🤖 AI-оптимизация</div>
+    <div class="row">
+      <div class="fg">
+        <label>Порог уверенности AI (0.0 – 1.0)</label>
+        <input type="number" name="ai_confidence_threshold" value="{{ s.ai_confidence_threshold }}"
+               min="0" max="1" step="0.05">
+        <small>0.75 = удалять файл только при 75%+ уверенности</small>
+      </div>
+      <div class="fg">
+        <label>Путь к кастомной AI-модели</label>
+        <input type="text" name="ai_model_path" value="{{ s.ai_model_path or '' }}"
+               placeholder="(встроенная)">
+        <small>Оставьте пустым для встроенных эвристик</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-actions">
+    <button type="button" class="btn btn-primary" onclick="saveSettings()">💾 Сохранить настройки</button>
+    <button type="button" class="btn btn-secondary" onclick="validatePaths()">🔍 Проверить папки</button>
+    <button type="button" class="btn btn-danger" onclick="resetSettings()">🔄 Сбросить к дефолту</button>
+    <span id="statusMsg"></span>
+  </div>
+
+</form>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='settings.js') }}"></script>
+</body>
+</html>
