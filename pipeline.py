@@ -440,9 +440,21 @@ class LauncherStep(BuildStep):
             except Exception:
                 pass
 
-        for script in ["app.py", "main.py", "demo.py", "gradio_app.py", "webui.py"]:
-            if (output_dir / script).exists():
-                entries.append({"name": script, "type": "py", "script": script})
+        scripts_to_check = [
+            "app.py", "main.py", "demo.py", "gradio_app.py", "webui.py",
+            "run.py", "server.py", "api.py", "launch.py", "start.py",
+            "cli.py", "gui.py", "bot.py", "service.py",
+        ]
+        subdirs_to_check = ["", "backend", "api", "server", "src", "app", "core"]
+
+        for sub in subdirs_to_check:
+            for script in scripts_to_check:
+                for base in (output_dir, src_dir):
+                    path = base / sub / script
+                    if path.exists():
+                        rel = str(Path(sub) / script) if sub else script
+                        entries.append({"name": rel, "type": "py", "script": str(rel)})
+                        break  # один раз за скрипт
         return entries[:5]
 
     @staticmethod

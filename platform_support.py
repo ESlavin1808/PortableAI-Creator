@@ -194,11 +194,31 @@ class PythonInstaller:
                 self.logs.append("🔧 Активирован import site в .pth файле.")
             break
 
+        # Создаём sitecustomize.py — добавляет корень portable в sys.path
+        # (embeddable Python игнорирует PYTHONPATH, даже с import site)
+        site_pkg = python_dir / "Lib" / "site-packages"
+        sc_file = site_pkg / "sitecustomize.py"
+        if site_pkg.exists() and not sc_file.exists():
+            sc_file.write_text(
+                "import sys, os\n"
+                "# Добавляем корень portable (родитель python_portable/) в sys.path\n"
+                "# __file__ = .../python_portable/Lib/site-packages/sitecustomize.py\n"
+                "root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))\n"
+                "if root not in sys.path:\n"
+                "    sys.path.insert(0, root)\n",
+                encoding="utf-8",
+            )
+            self.logs.append("🔧 Создан sitecustomize.py (sys.path fix для embeddable Python).")
+
     def _install_pip_windows(self, python_dir: Path, python_exe: Path):
         env = self._make_env(python_dir)
         self.logs.append("📦 Установка pip...")
         get_pip = python_dir / "get-pip.py"
-        urllib.request.urlretrieve("https://bootstrap.pypa.io/get-pip.py", get_pip)
+        resp = requests.get("https://bootstrap.pypa.io/get-pip.py", timeout=120, stream=True)
+        resp.raise_for_status()
+        with open(get_pip, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
         subprocess.check_call(
             [str(python_exe.resolve()), str(get_pip.resolve()),
              "--no-warn-script-location", "--quiet"],
@@ -309,39 +329,89 @@ class LauncherGenerator:
         self.scripts_dir = self.python_dir / self.cfg["scripts_dir"]
 
     def create(self, entries: List[Dict]):
-        if entries:
-            for ep in entries:
-                self._write(ep)
-        else:
-            self._write_shell()
+        for ep in entries:
+            self._write(ep)
+        self._write_shell()  # всегда создаём shell для ручного ввода
 
     def _write(self, ep: Dict):
         name = ep["name"]
         if self.platform == "win32":
             cmd = self._win_cmd(name, ep["type"], ep)
-            bat = (
-                "@echo off\n"
-                'cd /d "%~dp0"\n'
-                'set "PYTHONNOUSERSITE=1"\n'
-                'set "PYTHONPATH=%~dp0"\n'
-                'set "PATH=%~dp0python_portable;%~dp0python_portable\\Scripts;%PATH%"\n'
-                f"{cmd}\n"
-                "pause\n"
-            )
+            bat = self._make_bat(cmd, name, ep["type"])
             (self.output_dir / f"run_{name}.bat").write_text(bat, encoding="utf-8")
         else:
             cmd = self._unix_cmd(name, ep["type"], ep)
-            sh = (
-                "#!/usr/bin/env bash\n"
-                'DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"\n'
-                'export PYTHONNOUSERSITE=1\n'
-                'export PYTHONPATH="$DIR"\n'
-                'export PATH="$DIR/python_portable/bin:$PATH"\n'
-                f'{cmd} "$@"\n'
-            )
+            sh = self._make_sh(cmd, name, ep["type"])
             path = self.output_dir / f"run_{name}.sh"
             path.write_text(sh, encoding="utf-8")
             path.chmod(0o755)
+
+    def _make_bat(self, cmd: str, name: str, ep_type: str) -> str:
+        lines = [
+            "@echo off",
+            'chcp 65001 >nul 2>&1',
+            'cd /d "%~dp0"',
+            'set "PYTHONNOUSERSITE=1"',
+            'set "PATH=%~dp0python_portable;%~dp0python_portable\\Scripts;%PATH%"',
+            '',
+            'if not exist "%~dp0python_portable\\python.exe" (',
+            '    echo [ERROR] Python не найден!',
+            '    echo Папка python_portable отсутствует.',
+            '    echo Запустите сборку заново.',
+            '    pause',
+            '    exit /b 1',
+            ')',
+        ]
+        if ep_type == "py":
+            lines.extend([
+                'if "%*"=="" (',
+                f'    echo ^> {cmd}',
+                '    echo.',
+                '    echo === Справка ===',
+                f'    {cmd} --help',
+                '    echo.',
+                '    echo === Запуск ===',
+                f'    echo Пример: {cmd} ^<аргументы^>',
+                '    echo.',
+                '    echo Для интерактивной работы используйте shell.bat',
+                '    pause',
+                '    exit /b 0',
+                ')',
+                cmd,
+            ])
+        else:
+            lines.append(cmd)
+        lines.extend([
+            'if errorlevel 1 (',
+            '    echo.',
+            '    echo [ЗАВЕРШЕНО С ОШИБКОЙ]',
+            '    echo Для ручного ввода команд используйте shell.bat',
+            ')',
+            'pause',
+        ])
+        return '\n'.join(lines) + '\n'
+
+    def _make_sh(self, cmd: str, name: str, ep_type: str) -> str:
+        lines = [
+            '#!/usr/bin/env bash',
+            'DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"',
+            'export PYTHONNOUSERSITE=1',
+            'export PATH="$DIR/python_portable/bin:$PATH"',
+        ]
+        if ep_type == "py":
+            # Для Linux: справка + команда
+            lines.extend([
+                f'echo "=== {name} --help ==="',
+                f'{cmd} --help',
+                'echo "=== Запуск ==="',
+                f'echo "Пример: {cmd} <аргументы>"',
+                'echo.',
+                cmd,
+            ])
+        else:
+            lines.append(cmd)
+        lines.append('echo "Exit code: $?"')
+        return '\n'.join(lines) + '\n'
 
     def _win_cmd(self, name: str, ep_type: str, ep: Dict) -> str:
         if ep_type == "cli":
@@ -362,16 +432,26 @@ class LauncherGenerator:
         return f'"$DIR/python_portable/bin/python3.11" "{script}"'
 
     def _write_shell(self):
+        name = "shell"
         if self.platform == "win32":
             bat = (
                 "@echo off\n"
+                "chcp 65001 >nul 2>&1\n"
                 'cd /d "%~dp0"\n'
                 'set "PYTHONNOUSERSITE=1"\n'
                 'set "PATH=%~dp0python_portable;%~dp0python_portable\\Scripts;%PATH%"\n'
-                "echo Portable Python shell. Type 'python' to start.\n"
+                "echo.\n"
+                "echo === Portable Python Shell ===\n"
+                "echo.\n"
+                'echo Python: "%~dp0python_portable\\python.exe"\n'
+                "echo.\n"
+                "echo Примеры команд:\n"
+                "echo   python app.py --help\n"
+                "echo   python main.py -i video.mp4 -o output\n"
+                "echo.\n"
                 "cmd.exe /k\n"
             )
-            (self.output_dir / "shell.bat").write_text(bat, encoding="utf-8")
+            (self.output_dir / f"{name}.bat").write_text(bat, encoding="utf-8")
         else:
             sh = (
                 "#!/usr/bin/env bash\n"
@@ -380,6 +460,6 @@ class LauncherGenerator:
                 'export PATH="$DIR/python_portable/bin:$PATH"\n'
                 'exec bash\n'
             )
-            path = self.output_dir / "shell.sh"
+            path = self.output_dir / f"{name}.sh"
             path.write_text(sh, encoding="utf-8")
             path.chmod(0o755)

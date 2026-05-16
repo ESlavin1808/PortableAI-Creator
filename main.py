@@ -197,7 +197,7 @@ def format_result_html(data: dict) -> str:
 
     btn_html = f"""
     <div style="margin-top:20px;border-top:1px solid #eee;padding-top:15px;">
-        <button onclick="startBuild('{safe_name}', '{safe_path}')"
+        <button onclick="startBuildSSE('{safe_name}', '{safe_path}')"
                 class="btn btn-primary" style="width:100%;font-size:16px;padding:15px;">
             🛠️ СОБРАТЬ ПОРТАТИВНУЮ ВЕРСИЮ
         </button>
@@ -206,64 +206,6 @@ def format_result_html(data: dict) -> str:
         <div id="reportBlock" style="display:none;margin-top:8px;"></div>
         <div id="buildLogs" style="display:none;margin-top:10px;" class="log"></div>
     </div>
-    <script>
-    async function startBuild(name, path) {{
-        const btn = event.target;
-        const status = document.getElementById('buildStatus');
-        const logsDiv = document.getElementById('buildLogs');
-        const sanityBlock = document.getElementById('sanityBlock');
-        const reportBlock = document.getElementById('reportBlock');
-        btn.disabled = true; btn.textContent = '⏳ Идет сборка...';
-        btn.style.background = '#64748b';
-        status.textContent = 'Инициализация...';
-        logsDiv.style.display = 'block'; logsDiv.textContent = '';
-        sanityBlock.style.display = 'none';
-        reportBlock.style.display = 'none';
-        try {{
-            const resp = await fetch('/api/build_portable', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{ repo_name: name, repo_path: path }})
-            }});
-            const result = await resp.json();
-            if (result.logs) logsDiv.textContent = result.logs.join('\\n');
-            
-            // Показываем sanity результаты
-            if (result.sanity && result.sanity.html) {{
-                sanityBlock.innerHTML = result.sanity.html;
-                sanityBlock.style.display = 'block';
-            }}
-            
-            // Кнопка скачать отчёт об ошибке
-            if (result.report_path) {{
-                reportBlock.innerHTML = '<a href="/download_report?file=' +
-                    encodeURIComponent(result.report_path) +
-                    '" class="btn btn-secondary" style="font-size:13px;">📋 Скачать отчёт об ошибке</a>';
-                reportBlock.style.display = 'block';
-            }}
-            
-            if (result.success) {{
-                status.innerHTML = '<span style="color:green">✅ Сборка завершена!</span>';
-                btn.textContent = '✅ Готово'; btn.className = 'btn btn-success';
-                if (result.archive_path) {{
-                    logsDiv.innerHTML += '\\n\\n';
-                    const dlLink = document.createElement('a');
-                    dlLink.href = '/download?file=' + encodeURIComponent(result.archive_path);
-                    dlLink.className = 'btn btn-secondary';
-                    dlLink.textContent = '📥 Скачать архив';
-                    logsDiv.appendChild(dlLink);
-                }}
-            }} else {{
-                status.innerHTML = '<span style="color:red">❌ Ошибка сборки</span>';
-                btn.textContent = '🔄 Попробовать снова';
-                btn.className = 'btn btn-danger'; btn.disabled = false;
-            }}
-        }} catch (err) {{
-            status.innerHTML = '<span style="color:red">❌ Ошибка сети: ' + err + '</span>';
-            btn.disabled = false;
-        }}
-    }}
-    </script>
     """
     html_parts.append(btn_html)
     return ''.join(html_parts)
@@ -477,11 +419,20 @@ def download_report():
 @app.route('/build/sse')
 def build_sse():
     """SSE-поток для логов сборки в реальном времени."""
-    repo_url = request.args.get('repo', '').strip()
-    if not repo_url:
+    repo_input = request.args.get('repo', '').strip()
+    if not repo_input:
         return "No repo specified", 400
 
-    repo_name = repo_url.rstrip('/').split('/')[-1].replace('.git', '')
+    # Определяем: это URL или локальный путь?
+    if '://' in repo_input:
+        # URL → извлекаем имя и находим локальный путь
+        repo_name = repo_input.rstrip('/').split('/')[-1].replace('.git', '')
+        repo_path = Path(settings_mgr.settings.temp_dir) / "repos" / repo_name
+    else:
+        # Локальный путь → используем как есть
+        repo_path = Path(repo_input)
+        repo_name = repo_path.name
+
     q: Queue = Queue()
 
     def on_log(msg: str):
@@ -489,7 +440,7 @@ def build_sse():
 
     def run_build():
         try:
-            builder.build_stream(repo_url, repo_url, on_log=on_log)
+            builder.build_stream(repo_name, str(repo_path), on_log=on_log)
         except Exception as e:
             q.put(f"❌ {e}")
         finally:

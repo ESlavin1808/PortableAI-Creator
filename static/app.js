@@ -17,6 +17,8 @@ function showTab(name, btn) {
 function startBuild() {
     const url = document.getElementById('repoUrl').value.trim();
     if (!url) { alert('Введите URL репозитория'); return; }
+    // Сохраняем для confirmBuild (после анализа поле может содержать HTML)
+    localStorage.setItem('lastRepoUrl', url);
     document.getElementById('loading').classList.remove('hidden');
     document.getElementById('statusText').textContent = 'Анализирую репозиторий...';
     window.location.href = '/analyze?repo=' + encodeURIComponent(url);
@@ -31,10 +33,15 @@ async function confirmBuild() {
     logDiv.innerHTML = '<span class="step">▶ Запуск сборки...</span>';
     logDiv.scrollTop = logDiv.scrollHeight;
 
-    const url = document.getElementById('repoUrl').value.trim();
+    const savedUrl = localStorage.getItem('lastRepoUrl') || '';
+    const url = savedUrl || document.getElementById('repoUrl').value.trim();
+    if (!url) {
+        logDiv.innerHTML += '\n<span class="err">❌ Не найден URL репозитория. Вернитесь на главную и введите URL.</span>';
+        document.getElementById('loading').classList.add('hidden');
+        return;
+    }
 
     // Используем SSE для получения логов в реальном времени
-    const repoName = url.split('/').pop().replace('.git', '') || 'repo';
     const eventSource = new EventSource('/build/sse?repo=' + encodeURIComponent(url));
 
     eventSource.onmessage = function(e) {
@@ -69,6 +76,57 @@ function escHtml(s) {
     const d = document.createElement('div');
     d.textContent = s;
     return d.innerHTML;
+}
+
+/* ── Build via SSE (called from result_html inline button) ── */
+async function startBuildSSE(name, path) {
+    const btn = event.target;
+    const status = document.getElementById('buildStatus');
+    const logsDiv = document.getElementById('buildLogs');
+    const sanityBlock = document.getElementById('sanityBlock');
+    const reportBlock = document.getElementById('reportBlock');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Идёт сборка...';
+    btn.style.background = '#64748b';
+    status.textContent = 'Инициализация...';
+    logsDiv.style.display = 'block';
+    logsDiv.textContent = '';
+    sanityBlock.style.display = 'none';
+    reportBlock.style.display = 'none';
+
+    const eventSource = new EventSource('/build/sse?repo=' + encodeURIComponent(path));
+
+    eventSource.onmessage = function(e) {
+        if (e.data === '"__DONE__"') {
+            logsDiv.innerHTML += '\n<hr><span class="ok">✅ Сборка завершена!</span>';
+            status.innerHTML = '<span style="color:green">✅ Сборка завершена!</span>';
+            btn.textContent = '✅ Готово';
+            btn.className = 'btn btn-success';
+            eventSource.close();
+            // Пробуем подгрузить sanity и архив
+            setTimeout(() => refreshDashboard(), 500);
+        } else {
+            let msg;
+            try { msg = JSON.parse(e.data); } catch(_) { msg = e.data; }
+            const cls = msg.startsWith('✅') ? 'ok'
+                     : msg.startsWith('⚠') ? 'warn'
+                     : msg.startsWith('❌') ? 'err'
+                     : msg.startsWith('▶') ? 'step'
+                     : 'info';
+            logsDiv.innerHTML += '\n<span class="' + cls + '">' + escHtml(msg) + '</span>';
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+    };
+
+    eventSource.onerror = function() {
+        logsDiv.innerHTML += '\n<span class="err">⚠️ Соединение потеряно</span>';
+        status.innerHTML = '<span style="color:red">❌ Ошибка соединения</span>';
+        btn.textContent = '🔄 Попробовать снова';
+        btn.className = 'btn btn-danger';
+        btn.disabled = false;
+        eventSource.close();
+    };
 }
 
 /* ── Preflight / Diagnostics ── */
